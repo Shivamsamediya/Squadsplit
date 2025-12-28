@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  Users, 
-  LogOut, 
-  User, 
+import {
+  Users,
+  LogOut,
+  User,
   ChevronDown,
   Menu,
   X
@@ -29,6 +29,7 @@ const Navbar = () => {
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
+          {/* Logo */}
           <div className="flex items-center">
             <Link to="/dashboard" className="flex items-center space-x-2">
               <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
@@ -46,13 +47,24 @@ const Navbar = () => {
             >
               Dashboard
             </Link>
+
             <Link
               to="/groups"
               className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
             >
               Groups
             </Link>
-            
+
+            {/* External App Link */}
+            <a
+              href="https://expense-tracker-new-frontend.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              Manage Your Own Expenses
+            </a>
+
             {/* User Menu */}
             <div className="relative">
               <button
@@ -72,6 +84,7 @@ const Navbar = () => {
                     <div className="font-medium">{currentUser?.displayName}</div>
                     <div className="text-gray-500">{currentUser?.email}</div>
                   </div>
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
@@ -84,17 +97,13 @@ const Navbar = () => {
             </div>
           </div>
 
-          {/* Mobile menu button */}
+          {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="text-gray-700 hover:text-primary-600 p-2"
             >
-              {isMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
         </div>
@@ -105,23 +114,37 @@ const Navbar = () => {
             <div className="px-2 pt-2 pb-3 space-y-1">
               <Link
                 to="/dashboard"
-                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50"
                 onClick={() => setIsMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50"
               >
                 Dashboard
               </Link>
+
               <Link
                 to="/groups"
-                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50"
                 onClick={() => setIsMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50"
               >
                 Groups
               </Link>
+
+              {/* External App Link */}
+              <a
+                href="https://expense-tracker-new-frontend.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50"
+              >
+                Manage Your Own Expenses
+              </a>
+
               <div className="border-t border-gray-200 pt-2">
                 <div className="px-3 py-2 text-sm text-gray-500">
                   <div className="font-medium">{currentUser?.displayName}</div>
                   <div>{currentUser?.email}</div>
                 </div>
+
                 <button
                   onClick={handleLogout}
                   className="flex items-center w-full px-3 py-2 text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-md"

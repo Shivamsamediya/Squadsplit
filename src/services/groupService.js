@@ -1,273 +1,241 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  arrayUnion, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  arrayUnion,
   arrayRemove,
   onSnapshot,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
-// Generate a random 6-character group code
+/* =========================
+   Utils
+   ========================= */
+
 const generateGroupCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  return Array.from({ length: 6 }, () =>
+    chars[Math.floor(Math.random() * chars.length)]
+  ).join('');
 };
 
-// Create a new group
+const extractUserData = (user) => ({
+  uid: user.uid,
+  displayName:
+    user.displayName || user.email?.split('@')[0] || 'User',
+  email: user.email,
+});
+
+/* =========================
+   Group CRUD
+   ========================= */
+
 export const createGroup = async (name, description, createdBy) => {
-  try {
-    const groupCode = generateGroupCode();
-    
-    // Extract only the user data we need (avoid Firebase internal properties)
-    const userData = {
-      uid: createdBy.uid,
-      displayName: createdBy.displayName || createdBy.email?.split('@')[0] || 'User',
-      email: createdBy.email
-    };
-    
-    const groupData = {
-      name,
-      description,
-      groupCode,
-      createdBy: userData,
-      members: [userData.uid],
-      memberDetails: [{
-        uid: userData.uid,
-        displayName: userData.displayName,
-        email: userData.email,
-        joinedAt: new Date().toISOString()
-      }],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
+  const groupCode = generateGroupCode();
+  const user = extractUserData(createdBy);
 
-    const docRef = await addDoc(collection(db, 'groups'), groupData);
-    
-    // Update user's groups array
-    await updateDoc(doc(db, 'users', createdBy.uid), {
-      groups: arrayUnion(docRef.id)
-    });
+  const groupData = {
+    name,
+    description,
+    groupCode,
+    createdBy: user,
+    members: [user.uid],
+    memberDetails: [
+      {
+        ...user,
+        joinedAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
 
-    return { id: docRef.id, ...groupData };
-  } catch (error) {
-    console.error('Error creating group:', error);
-    throw error;
-  }
+  const docRef = await addDoc(collection(db, 'groups'), groupData);
+
+  await updateDoc(doc(db, 'users', user.uid), {
+    groups: arrayUnion(docRef.id),
+  });
+
+  return { id: docRef.id, ...groupData };
 };
 
-// Get group by ID
 export const getGroup = async (groupId) => {
-  try {
-    const docRef = doc(db, 'groups', groupId);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
-    } else {
-      throw new Error('Group not found');
-    }
-  } catch (error) {
-    console.error('Error getting group:', error);
-    throw error;
-  }
+  const snap = await getDoc(doc(db, 'groups', groupId));
+  if (!snap.exists()) throw new Error('Group not found');
+  return { id: snap.id, ...snap.data() };
 };
 
-// Helper to fetch expenses for a group
+/* =========================
+   Expenses
+   ========================= */
+
 const fetchGroupExpenses = async (groupId) => {
-  const expensesRef = collection(db, 'expenses');
-  const q = query(expensesRef, where('groupId', '==', groupId));
-  const snapshot = await getDocs(q);
-  const expenses = [];
-  snapshot.forEach(doc => expenses.push({ id: doc.id, ...doc.data() }));
-  return expenses;
-};
-
-// Get groups for a user (with balances attached)
-export const getUserGroups = async (userId) => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    const userData = userDoc.data();
-    const groupIds = userData?.groups || [];
-
-    const groups = [];
-    for (const groupId of groupIds) {
-      try {
-        const group = await getGroup(groupId);
-
-        // Fetch expenses and calculate balances
-        const expenses = await fetchGroupExpenses(groupId);
-        // Use memberDetails if available, else fallback to members array
-        const members = group.memberDetails || (group.members?.map(uid => ({ uid })) || []);
-        const balances = calculateBalances(expenses, members);
-
-        groups.push({ ...group, balances });
-      } catch (error) {
-        console.error(`Error fetching group ${groupId}:`, error);
-      }
-    }
-
-    return groups.sort((a, b) => {
-      const aDate = a.createdAt?.toDate?.() || new Date(0);
-      const bDate = b.createdAt?.toDate?.() || new Date(0);
-      return bDate - aDate;
-    });
-  } catch (error) {
-    console.error('Error getting user groups:', error);
-    throw error;
-  }
-};
-
-// Join group by code
-export const joinGroup = async (groupCode, user) => {
-  try {
-    // Find group by code
-    const groupsRef = collection(db, 'groups');
-    const q = query(groupsRef, where('groupCode', '==', groupCode));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      throw new Error('Invalid group code');
-    }
-
-    const groupDoc = querySnapshot.docs[0];
-    const groupData = groupDoc.data();
-
-    // Check if user is already a member
-    if (groupData.members.includes(user.uid)) {
-      throw new Error('You are already a member of this group');
-    }
-
-    // Add user to group
-    await updateDoc(doc(db, 'groups', groupDoc.id), {
-      members: arrayUnion(user.uid),
-      memberDetails: arrayUnion({
-        uid: user.uid,
-        displayName: user.displayName || user.email?.split('@')[0] || 'User',
-        email: user.email,
-        joinedAt: new Date().toISOString()
-      }),
-      updatedAt: serverTimestamp()
-    });
-
-    // Add group to user's groups
-    await updateDoc(doc(db, 'users', user.uid), {
-      groups: arrayUnion(groupDoc.id)
-    });
-
-    return { id: groupDoc.id, ...groupData };
-  } catch (error) {
-    console.error('Error joining group:', error);
-    throw error;
-  }
-};
-
-// Leave group
-export const leaveGroup = async (groupId, userId) => {
-  try {
-    // Remove user from group
-    await updateDoc(doc(db, 'groups', groupId), {
-      members: arrayRemove(userId),
-      memberDetails: arrayRemove({
-        uid: userId
-      }),
-      updatedAt: serverTimestamp()
-    });
-
-    // Remove group from user's groups
-    await updateDoc(doc(db, 'users', userId), {
-      groups: arrayRemove(groupId)
-    });
-  } catch (error) {
-    console.error('Error leaving group:', error);
-    throw error;
-  }
-};
-
-// Add expense to group
-export const addExpense = async (groupId, expenseData) => {
-  try {
-    const expense = {
-      ...expenseData,
-      groupId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    const docRef = await addDoc(collection(db, 'expenses'), expense);
-    return { id: docRef.id, ...expense };
-  } catch (error) {
-    console.error('Error adding expense:', error);
-    throw error;
-  }
-};
-
-// Get expenses for a group
-export const getGroupExpenses = (groupId, callback) => {
-  const expensesRef = collection(db, 'expenses');
   const q = query(
-    expensesRef, 
+    collection(db, 'expenses'),
+    where('groupId', '==', groupId)
+  );
+
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+export const addExpense = async (groupId, expenseData) => {
+  const expense = {
+    ...expenseData,
+    groupId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  const ref = await addDoc(collection(db, 'expenses'), expense);
+  return { id: ref.id, ...expense };
+};
+
+export const getGroupExpenses = (groupId, callback) => {
+  const q = query(
+    collection(db, 'expenses'),
     where('groupId', '==', groupId),
     orderBy('createdAt', 'desc')
   );
 
   return onSnapshot(q, (snapshot) => {
-    const expenses = [];
-    snapshot.forEach((doc) => {
-      expenses.push({ id: doc.id, ...doc.data() });
-    });
-    callback(expenses);
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
   });
 };
 
-// Calculate balances for a group
-export const calculateBalances = (expenses, members) => {
-  const balances = {};
-  const memberIds = members.map(member => member.uid);
+/* =========================
+   User Groups
+   ========================= */
 
-  // Initialize balances
-  memberIds.forEach(memberId => {
-    balances[memberId] = 0;
+export const getUserGroups = async (userId) => {
+  const userSnap = await getDoc(doc(db, 'users', userId));
+  const groupIds = userSnap.data()?.groups || [];
+
+  const groups = await Promise.all(
+    groupIds.map(async (groupId) => {
+      try {
+        const group = await getGroup(groupId);
+        const expenses = await fetchGroupExpenses(groupId);
+        const members =
+          group.memberDetails ||
+          group.members.map(uid => ({ uid }));
+
+        return {
+          ...group,
+          balances: calculateBalances(expenses, members),
+        };
+      } catch (err) {
+        console.error(`Error loading group ${groupId}`, err);
+        return null;
+      }
+    })
+  );
+
+  return groups
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aDate = a.createdAt?.toDate?.() || new Date(0);
+      const bDate = b.createdAt?.toDate?.() || new Date(0);
+      return bDate - aDate;
+    });
+};
+
+/* =========================
+   Join / Leave Group
+   ========================= */
+
+export const joinGroup = async (groupCode, user) => {
+  const q = query(
+    collection(db, 'groups'),
+    where('groupCode', '==', groupCode)
+  );
+
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) throw new Error('Invalid group code');
+
+  const groupDoc = snapshot.docs[0];
+  const group = groupDoc.data();
+
+  if (group.members.includes(user.uid)) {
+    throw new Error('You are already a member of this group');
+  }
+
+  const userData = extractUserData(user);
+
+  await updateDoc(groupDoc.ref, {
+    members: arrayUnion(user.uid),
+    memberDetails: arrayUnion({
+      ...userData,
+      joinedAt: new Date().toISOString(),
+    }),
+    updatedAt: serverTimestamp(),
   });
 
-  // Calculate balances
-  expenses.forEach(expense => {
-    const amount = parseFloat(expense.amount);
-    const payerId = expense.payerId;
-    const splitAmount = amount / memberIds.length;
+  await updateDoc(doc(db, 'users', user.uid), {
+    groups: arrayUnion(groupDoc.id),
+  });
 
-    // Payer gets credited the full amount
-    balances[payerId] += amount;
-    
-    // Each member pays their share
-    memberIds.forEach(memberId => {
-      balances[memberId] -= splitAmount;
-    });
+  return { id: groupDoc.id, ...group };
+};
+
+export const leaveGroup = async (groupId, userId) => {
+  const groupRef = doc(db, 'groups', groupId);
+  const snap = await getDoc(groupRef);
+
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+
+  const updatedMembers = data.members.filter(uid => uid !== userId);
+  const updatedDetails = data.memberDetails.filter(
+    m => m.uid !== userId
+  );
+
+  await updateDoc(groupRef, {
+    members: updatedMembers,
+    memberDetails: updatedDetails,
+    updatedAt: serverTimestamp(),
+  });
+
+  await updateDoc(doc(db, 'users', userId), {
+    groups: arrayRemove(groupId),
+  });
+};
+
+/* =========================
+   Realtime
+   ========================= */
+
+export const subscribeToGroup = (groupId, callback) => {
+  return onSnapshot(doc(db, 'groups', groupId), (snap) => {
+    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  });
+};
+
+/* =========================
+   Balance Calculation
+   ========================= */
+
+export const calculateBalances = (expenses, members) => {
+  const balances = {};
+  const memberIds = members.map(m => m.uid);
+
+  memberIds.forEach(id => (balances[id] = 0));
+
+  expenses.forEach(({ amount, payerId }) => {
+    const value = parseFloat(amount);
+    const share = value / memberIds.length;
+
+    balances[payerId] += value;
+    memberIds.forEach(id => (balances[id] -= share));
   });
 
   return balances;
-};
-
-// Get real-time group updates
-export const subscribeToGroup = (groupId, callback) => {
-  const groupRef = doc(db, 'groups', groupId);
-  
-  return onSnapshot(groupRef, (doc) => {
-    if (doc.exists()) {
-      callback({ id: doc.id, ...doc.data() });
-    } else {
-      callback(null);
-    }
-  });
 };

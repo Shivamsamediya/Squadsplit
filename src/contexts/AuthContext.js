@@ -1,15 +1,22 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
-  updateProfile 
+  updateProfile,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -23,71 +30,99 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const signup = async (email, password, displayName) => {
+  /* =========================
+     Helpers
+     ========================= */
+
+  const getUserData = useCallback(async (uid) => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Update profile with display name
+      const snap = await getDoc(doc(db, 'users', uid));
+      return snap.exists() ? snap.data() : null;
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+      return null;
+    }
+  }, []);
+
+  /* =========================
+     Auth Actions
+     ========================= */
+
+  const signup = useCallback(
+    async (email, password, displayName) => {
+      const { user } = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
       await updateProfile(user, { displayName });
-      
-      // Create user document in Firestore
+
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: user.email,
-        displayName: displayName,
+        displayName,
         createdAt: new Date().toISOString(),
-        groups: []
+        groups: [],
       });
-      
+
       return user;
-    } catch (error) {
-      throw error;
-    }
-  };
+    },
+    []
+  );
 
-  const login = (email, password) => {
+  const login = useCallback((email, password) => {
     return signInWithEmailAndPassword(auth, email, password);
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     return signOut(auth);
-  };
+  }, []);
 
-  const getUserData = async (uid) => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (userDoc.exists()) {
-        return userDoc.data();
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      return null;
-    }
-  };
+  /* =========================
+     Auth Listener
+     ========================= */
 
   useEffect(() => {
+    let mounted = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!mounted) return;
+
       if (user) {
         const userData = await getUserData(user.uid);
-        setCurrentUser({ ...user, ...userData });
+
+        setCurrentUser({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          ...userData,
+        });
       } else {
         setCurrentUser(null);
       }
+
       setLoading(false);
     });
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [getUserData]);
 
-  const value = {
-    currentUser,
-    signup,
-    login,
-    logout,
-    getUserData
-  };
+  /* ========================= */
+
+  const value = useMemo(
+    () => ({
+      currentUser,
+      signup,
+      login,
+      logout,
+      getUserData,
+    }),
+    [currentUser, signup, login, logout, getUserData]
+  );
 
   return (
     <AuthContext.Provider value={value}>
