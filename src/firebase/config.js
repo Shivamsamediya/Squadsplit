@@ -3,15 +3,14 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Your Firebase configuration
-// Replace with your actual Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyC9ydJCyn2-pCeC7USXEQLJJ2QPBRGwflg",
-  authDomain: "squadsplit-59e86.firebaseapp.com",
-  projectId: "squadsplit-59e86",
-  storageBucket: "squadsplit-59e86.firebasestorage.app",
-  messagingSenderId: "109800043786",
-  appId: "1:109800043786:web:c4a1bc456b262c8dd4f6f3",
-  measurementId: "G-80C37LRW99"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
