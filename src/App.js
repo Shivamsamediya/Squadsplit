@@ -17,6 +17,7 @@ import Dashboard from './components/Dashboard/Dashboard';
 import CreateGroup from './components/Groups/CreateGroup';
 import JoinGroup from './components/Groups/JoinGroup';
 import GroupDetail from './components/Groups/GroupDetail';
+import GroupsList from './components/Groups/GroupsList';
 
 import './index.css';
 
@@ -44,6 +45,7 @@ function App() {
           {/* Protected Routes */}
           <Route element={<ProtectedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/groups" element={<GroupsList />} />
             <Route path="/groups/create" element={<CreateGroup />} />
             <Route path="/groups/join" element={<JoinGroup />} />
             <Route path="/groups/:groupId" element={<GroupDetail />} />
