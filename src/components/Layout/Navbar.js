@@ -62,7 +62,7 @@ const Navbar = () => {
               rel="noopener noreferrer"
               className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
             >
-              Manage Your Own Expenses
+              Personal Expenses
             </a>
 
             {/* User Menu */}

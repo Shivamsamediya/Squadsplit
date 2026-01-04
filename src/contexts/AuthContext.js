@@ -1,132 +1,56 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-} from 'react';
-import {
-  createUserWithEmailAndPassword,
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { auth } from '../firebase/config'
+import { 
+  onAuthStateChanged, 
   signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
+  createUserWithEmailAndPassword,
+  signOut 
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* =========================
-     Helpers
-     ========================= */
-
-  const getUserData = useCallback(async (uid) => {
-    try {
-      const snap = await getDoc(doc(db, 'users', uid));
-      return snap.exists() ? snap.data() : null;
-    } catch (err) {
-      console.error('Error fetching user data:', err);
-      return null;
-    }
-  }, []);
-
-  /* =========================
-     Auth Actions
-     ========================= */
-
-  const signup = useCallback(
-    async (email, password, displayName) => {
-      const { user } = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      await updateProfile(user, { displayName });
-
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        displayName,
-        createdAt: new Date().toISOString(),
-        groups: [],
-      });
-
-      return user;
-    },
-    []
-  );
-
-  const login = useCallback((email, password) => {
+  // Login function
+  function login(email, password) {
     return signInWithEmailAndPassword(auth, email, password);
-  }, []);
+  }
 
-  const logout = useCallback(() => {
+  // Signup function
+  function signup(email, password) {
+    return createUserWithEmailAndPassword(auth, email, password);
+  }
+
+  // Logout function
+  function logout() {
     return signOut(auth);
-  }, []);
-
-  /* =========================
-     Auth Listener
-     ========================= */
+  }
 
   useEffect(() => {
-    let mounted = true;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!mounted) return;
-
-      if (user) {
-        const userData = await getUserData(user.uid);
-
-        setCurrentUser({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          ...userData,
-        });
-      } else {
-        setCurrentUser(null);
-      }
-
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setLoading(false); // Check complete hone ke baad loading false
     });
 
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [getUserData]);
+    return unsubscribe;
+  }, []);
 
-  /* ========================= */
-
-  const value = useMemo(
-    () => ({
-      currentUser,
-      signup,
-      login,
-      logout,
-      getUserData,
-    }),
-    [currentUser, signup, login, logout, getUserData]
-  );
+  const value = {
+    currentUser,
+    login,
+    signup,
+    logout
+  };
 
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
     </AuthContext.Provider>
   );
-};
+}

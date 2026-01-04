@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { addExpense } from '../../services/groupService';
-import { X, DollarSign, User, FileText, AlertCircle } from 'lucide-react';
+import { X, IndianRupee, User, FileText, AlertCircle } from 'lucide-react';
 
 const AddExpenseModal = ({ group, onClose }) => {
   const { currentUser } = useAuth();
@@ -91,7 +91,7 @@ const AddExpenseModal = ({ group, onClose }) => {
         <header className="flex items-center justify-between border-b px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100">
-              <DollarSign className="h-5 w-5 text-primary-600" />
+              <IndianRupee className="h-5 w-5 text-primary-600" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Add Expense</h2>
@@ -136,12 +136,12 @@ const AddExpenseModal = ({ group, onClose }) => {
           {/* Amount */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
-              <DollarSign className="inline h-4 w-4 mr-1" />
+              ₹
               Amount *
             </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">
-                $
+                ₹
               </span>
               <input
                 type="number"
@@ -186,7 +186,7 @@ const AddExpenseModal = ({ group, onClose }) => {
               • Split equally among {group.members?.length || 0} members
             </p>
             <p className="text-blue-800">
-              • Each person owes: ${perPersonAmount}
+              • Each person owes: ₹{perPersonAmount}
             </p>
           </div>
 
